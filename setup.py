@@ -1,21 +1,10 @@
-from config.env import medrlcot_config
-from config import data_manager
+from medrlcot.config.env import medrlcot_config
+from medrlcot import data_manager
+from medrlcot.medrlcot_logger import setup_logger
 import logging
-import os
 
+setup_logger()
+logger = logging.getLogger("MedRL-CoT Setup")
 
-# Setup logs
-os.makedirs(medrlcot_config.log_dir, exist_ok=True)
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("logs/medrlcot.log"),
-        logging.StreamHandler()
-    ]
-)
-
-logger = logging.getLogger("medrlcot")
-
-# Load datasets
-data_manager.load_datasets(medrlcot_config.datasets)
+# Download datasets
+data_manager.load_datasets(medrlcot_config.datasets, data_dir=medrlcot_config.data_dir, load=False)

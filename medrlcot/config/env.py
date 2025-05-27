@@ -6,6 +6,8 @@ class MedRL_CoT:
         self.env = load_dotenv()
         
         # Meta info
+        self.model_name = os.getenv('model_name', 'MedRl-CoT')
+        self.log_name = os.getenv('log_name', 'medrlcot')
         self.log_dir = os.getenv('log_dir', 'logs')
         self.data_dir = os.getenv('data_dir', 'data')
         
