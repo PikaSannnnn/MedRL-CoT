@@ -8,11 +8,6 @@ import numpy as np
 
 logger = logging.getLogger("DataManager")
 
-def hf_to_pd():
-    return
-
-process_funcs = {'hf': hf_to_pd}
-
 class Dataset:
     '''
     Custom dataset class meant to store the two datasets and to preprocess them before passing them into dataloaders. 
