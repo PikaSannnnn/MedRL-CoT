@@ -1,5 +1,6 @@
 import logging
 import datasets as hf_datasets
+import subprocess
 import os
 
 import torch
@@ -75,8 +76,13 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
                     
                     if load:
                         logger.info(f"Loading %s dataset.", dataset['src'])
-                        logger.critical("TODO: NEED TO IMPLEMENT HF DATASET LOAD FROM DISK")
-                        logger.info(f"Successfully loaded %s as key {key}", dataset['src'])
+                        try:
+                            ds = hf_datasets.Dataset.from_file(os.path.join(ds_path, "train", "data-00000-of-00001.arrow"))
+                        except:
+                            ds = None
+                            logger.error(f"Error loading %s dataset from local!", dataset['src'])
+                        else:
+                            logger.info(f"Successfully loaded %s as key {key}", dataset['src'])
                 else:
                     logger.info(f"Downloading %s hugging face dataset.", dataset['src'])
                     
@@ -90,19 +96,17 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
                 logger.warning(f"No source was provided for '{key}', skipping...")
         elif dataset['type'] == 'phys':
             if dataset['src']:
-                os.makedirs(data_dir, exist_ok=True)
-                ds_path = os.path.join(data_dir, key)
+                ds_path = os.path.join(data_dir, dataset['src'])
                 if os.path.exists(ds_path):
-                    logger.info(f"%s dataset already exists in disk. If the dataset is giving errors or you'd like a fresh install, delete the {ds_path} directory.", dataset['src'])
+                    print(ds_path)
+                    ds = hf_datasets.load_dataset(
+                        "csv",
+                        data_files=f"{ds_path}",
+                    )
                     
-                    if load:
-                        logger.info(f"Loading %s dataset.", dataset['src'])
-                        logger.critical("TODO: NEED TO IMPLEMENT HF DATASET LOAD FROM DISK")
-                        logger.info(f"Successfully loaded %s as key {key}", dataset['src'])
+                    loaded_datasets[key] = ds
                 else:
-                    logger.critical("TODO: NEED TO IMPLEMENT PHYSIO DATASET LOADING")
-            else:
-                logger.warning(f"No source was provided for '{key}', skipping...")
+                    logger.error(f"Dataset not found in local. This dataset must be manually installed to local with the dataset expected to be saved as {ds_path}.")
     
     failed_datasets = set(datasets.keys()) - set(loaded_datasets.keys())
     if load:

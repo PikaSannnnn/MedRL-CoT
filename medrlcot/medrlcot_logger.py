@@ -1,4 +1,5 @@
-from .config.env import medrlcot_config
+from medrlcot.config.env import MedRL_CoT
+# from .config.env import medrlcot_config
 import logging
 import os
 import re
@@ -6,6 +7,10 @@ import re
 logger = logging.getLogger("Logger")
 
 def setup_logger():
+    # Get env
+    model_cfg_path = os.path.join(os.getcwd(), "config/.env")
+    medrlcot_config = MedRL_CoT(model_cfg_path)
+    
     # Setup logs
     os.makedirs(medrlcot_config.log_dir, exist_ok=True)
     pattern = re.compile(rf"{re.escape(medrlcot_config.log_name)}(\d+)\.log")
