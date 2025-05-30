@@ -64,20 +64,25 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
     '''
     logger.info(f"Loading datasets: {list(datasets.keys())}")
     
+    data_dir = os.path.join(os.getcwd(), data_dir)
     loaded_datasets = dict()
     for key, dataset in datasets.items():
         ds = None
+        os.makedirs(data_dir, exist_ok=True)    # Make data diectory if needed
         if dataset['type'] == 'hf':
-            if dataset['src']:
-                os.makedirs(data_dir, exist_ok=True)
-                ds_path = os.path.join(data_dir, key)
+            if dataset['src']:  
+                ds_path = os.path.join(data_dir, key)   # dataset folder to store and load arrow files from
                 if os.path.exists(ds_path):
                     logger.info(f"%s dataset already exists in disk. If the dataset is giving errors or you'd like a fresh install, delete the {ds_path} directory.", dataset['src'])
                     
                     if load:
-                        logger.info(f"Loading %s dataset.", dataset['src'])
+                        logger.info(f"Loading saved hugginface %s dataset.", dataset['src'])
                         try:
-                            ds = hf_datasets.Dataset.from_file(os.path.join(ds_path, "train", "data-00000-of-00001.arrow"))
+                            # Need list of arrow files in case dataset is split into multiple arrows
+                            arrow_dir = os.path.join(ds_path, "train")
+                            arrows = [os.path.join(arrow_dir, f) for f in os.listdir(arrow_dir) if f.endswith(".arrow")]
+                            # print(arrows)
+                            ds = hf_datasets.concatenate_datasets([hf_datasets.Dataset.from_file(arrow) for arrow in arrows])
                         except:
                             ds = None
                             logger.error(f"Error loading %s dataset from local!", dataset['src'])
@@ -86,28 +91,64 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
                 else:
                     logger.info(f"Downloading %s hugging face dataset.", dataset['src'])
                     
-                    ds = hf_datasets.load_dataset(dataset['src'])
-                    ds.save_to_disk(ds_path)
-                    
-                    logger.info(f"Done downloading %s and saved to {ds_path}.", dataset['src'])
+                    try:
+                        # Download dataset from hf
+                        ds = hf_datasets.load_dataset(dataset['src'])
+                    except:
+                        ds = None
+                        logger.error(f"Error downloading %s dataset!", dataset['src'])
+                    else:
+                        # Save hf dataset as arrow(s)
+                        ds.save_to_disk(ds_path)
+                        logger.info(f"Done downloading %s and saved to {ds_path}.", dataset['src'])
                 
                 loaded_datasets[key] = ds
             else:
                 logger.warning(f"No source was provided for '{key}', skipping...")
         elif dataset['type'] == 'phys':
             if dataset['src']:
-                ds_path = os.path.join(data_dir, dataset['src'])
-                if os.path.exists(ds_path):
-                    print(ds_path)
-                    ds = hf_datasets.load_dataset(
-                        "csv",
-                        data_files=f"{ds_path}",
-                    )
-                    
-                    loaded_datasets[key] = ds
+                ds_dir = os.path.join(data_dir, key)    # overall dataset directory
+                data_path = os.path.join(ds_dir, dataset['src'])    # Path to the csv dataset
+                ds_path = os.path.join(ds_dir, "hf")    # path to where the hugginface dataset of the physio csv is saved and loaded from
+                if os.path.exists(ds_dir):
+                    if os.path.exists(ds_path):
+                        logger.info(f"%s dataset already exists in disk as huggin_face dataset. If the dataset is giving errors or you'd like a fresh install, delete the {ds_path} directory.", dataset['src'])
+                        
+                        if load:
+                            logger.info(f"Loading saved hugginface %s dataset.", dataset['src'])
+                            try:
+                                # Need list of arrow files in case dataset is split into multiple arrows
+                                arrow_dir = os.path.join(ds_path, "train")
+                                arrows = [os.path.join(arrow_dir, f) for f in os.listdir(arrow_dir) if f.endswith(".arrow")]
+                                ds = hf_datasets.concatenate_datasets([hf_datasets.Dataset.from_file(arrow) for arrow in arrows])
+                                # ds = hf_datasets.Dataset.from_file(os.path.join(ds_path, "train", "data-00000-of-00001.arrow"))
+                            except:
+                                ds = None
+                                logger.error(f"Error loading %s hugging_face dataset from local!", dataset['src'])
+                            else:
+                                logger.info(f"Successfully loaded hugging_face of %s as key {key}", dataset['src'])
+                    else:
+                        try:
+                            # Load dataset from pre-downloaded csv
+                            ds = hf_datasets.load_dataset(
+                                "csv",
+                                data_files=f"{data_path}",
+                            )
+                        except:
+                            ds = None
+                            logger.error(f"Error loading original %s dataset from local!", dataset['src'])
+                        else:
+                            # Save to the hugginface location
+                            ds.save_to_disk(ds_path)
+                            logger.info(f"Done loading %s and saved hugging_face dataset to {ds_path}.", dataset['src'])
                 else:
-                    logger.error(f"Dataset not found in local. This dataset must be manually installed to local with the dataset expected to be saved as {ds_path}.")
+                    logger.error(f"Dataset not found in local. Due to long web-download time, this dataset must be manually installed to local with the dataset expected to be saved as {data_path}.")
     
+                # Add dataset to list of datasets if successful (i.e. not None)
+                if ds is not None:
+                    loaded_datasets[key] = ds
+                    
+    # Load status
     failed_datasets = set(datasets.keys()) - set(loaded_datasets.keys())
     if load:
         if failed_datasets:

@@ -12,11 +12,11 @@ class MedRL_CoT:
         self.log_dir = os.getenv('log_dir', 'logs')
         self.data_dir = os.getenv('data_dir', 'data')
         
-        print(self.model_name)
+        # print(self.model_name)
         
         # Dataset Info
         datasets = [dataset.strip().split('/') for dataset in os.getenv('datasets', '').split(',')]
-        print(datasets)
+        # print(datasets)
         self.datasets = {ds_name: {'type': ds_type, 'src': os.getenv(ds_name, None)} for ds_type, ds_name in datasets}
         # print(self.datasets)
         
