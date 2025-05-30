@@ -9,6 +9,10 @@
     "class": {
       "dtype": "string",
       "_type": "Value"
+    },
+    "case_id": {
+      "dtype": "int64",
+      "_type": "Value"
     }
   },
   "homepage": "",
