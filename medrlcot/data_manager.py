@@ -2,6 +2,7 @@ import logging
 import datasets as hf_datasets
 import subprocess
 import os
+import json
 
 import torch
 from torch.utils.data import DataLoader
@@ -71,37 +72,43 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
         os.makedirs(data_dir, exist_ok=True)    # Make data diectory if needed
         if dataset['type'] == 'hf':
             if dataset['src']:  
-                ds_path = os.path.join(data_dir, key)   # dataset folder to store and load arrow files from
-                if os.path.exists(ds_path):
-                    logger.info(f"%s dataset already exists in disk. If the dataset is giving errors or you'd like a fresh install, delete the {ds_path} directory.", dataset['src'])
-                    
-                    if load:
-                        logger.info(f"Loading saved hugginface %s dataset.", dataset['src'])
+                ds_all_path = os.path.join(data_dir, key)   # dataset folder to store and load arrow files from
+                if os.path.exists(ds_all_path):
+                    ds_path = os.path.join(ds_all_path, 'train')
+                    if os.path.exists(ds_path):
+                        logger.info(f"%s dataset already exists in disk. If the dataset is giving errors or you'd like a fresh install, delete the {ds_path} directory.", dataset['src'])
+                        
+                        if load:
+                            logger.info(f"Loading saved hugginface %s dataset.", dataset['src'])
+                            try:
+                                # Need list of arrow files in case dataset is split into multiple arrows
+                                arrow_dir = os.path.join(ds_path, "train")
+                                arrows = [os.path.join(arrow_dir, f) for f in os.listdir(arrow_dir) if f.endswith(".arrow")]
+                                ds = hf_datasets.concatenate_datasets([hf_datasets.Dataset.from_file(arrow) for arrow in arrows])
+                            except:
+                                ds = None
+                                logger.error(f"Error loading %s dataset from local!", dataset['src'])
+                            else:
+                                logger.info(f"Successfully loaded %s as key {key}", dataset['src'])
+                    else:
+                        logger.info(f"Downloading %s hugging face dataset.", dataset['src'])
+                        
                         try:
-                            # Need list of arrow files in case dataset is split into multiple arrows
-                            arrow_dir = os.path.join(ds_path, "train")
-                            arrows = [os.path.join(arrow_dir, f) for f in os.listdir(arrow_dir) if f.endswith(".arrow")]
-                            # print(arrows)
-                            ds = hf_datasets.concatenate_datasets([hf_datasets.Dataset.from_file(arrow) for arrow in arrows])
+                            # Download dataset from hf
+                            ds = hf_datasets.load_dataset(dataset['src'])
                         except:
                             ds = None
-                            logger.error(f"Error loading %s dataset from local!", dataset['src'])
+                            logger.error(f"Error downloading %s dataset!", dataset['src'])
                         else:
-                            logger.info(f"Successfully loaded %s as key {key}", dataset['src'])
-                else:
-                    logger.info(f"Downloading %s hugging face dataset.", dataset['src'])
-                    
-                    try:
-                        # Download dataset from hf
-                        ds = hf_datasets.load_dataset(dataset['src'])
-                    except:
-                        ds = None
-                        logger.error(f"Error downloading %s dataset!", dataset['src'])
-                    else:
-                        # Save hf dataset as arrow(s)
-                        ds.save_to_disk(ds_path)
-                        logger.info(f"Done downloading %s and saved to {ds_path}.", dataset['src'])
-                
+                            # Save hf dataset as arrow(s)
+                            ds.save_to_disk(ds_path)
+                            logger.info(f"Done downloading %s and saved to {ds_path}.", dataset['src'])
+
+                # ds_processed_path = os.path.join(ds_all_path, "processed")
+                # ds_processed_ckpt = os.path.join(ds_all_path, "checkpoint.json")
+                # if os.path.exists(ds_processed_path):
+                #     if os.path.exists(ds_processed_dkpt):
+                        
                 loaded_datasets[key] = ds
             else:
                 logger.warning(f"No source was provided for '{key}', skipping...")
