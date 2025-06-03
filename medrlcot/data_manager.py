@@ -5,10 +5,15 @@ import os
 import json
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split    # for "even" splitting
+from transformers import AutoTokenizer
 
 logger = logging.getLogger("DataManager")
+
+default_tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
 class Dataset:
     '''
@@ -17,47 +22,58 @@ class Dataset:
     The dataset is shuffled and split into train, validation, and testing on instantiation. 
     Although if it's not great or want to try with different sets, can call shuffle_split() to do this
     '''
-    def __init__(self, dataset, process_func, split_keys=['train', 'val', 'test'], split=[70, 20, 10]):
+    def __init__(self, datasets, jss=None, tokenizer=None, split=[.75, .25],):
         # Meta Init
         self.num_entries = 0
-        self.dataset_keys = split_keys
         self.split_ratio = split
-        self.split_indices = []
-        # TODO: Compute split indices
         
         # Dataset Init
-        self.full_dataset = dataset if isinstance(dataset, torch.utils.data.Dataset) else self.__ds_to_tensor__(dataset)
-        self.dataset = {key: None for key in split_keys}
+        self.original_datasets = datasets
+        # self.datasets = self.__tokenize__()
+        self.tokenizer = tokenizer if tokenizer else default_tokenizer
+        self.data = jss(self.original_datasets) if jss else self.joint_shuffle_split()
         
-        # Preprocess data into the note types
-        self.__preprocess__(self, process_func=process_func)
-        
-        # Initial shuffle split
-        self.shuffle_split()
-            
-    def __ds_to_tensor__(self, dataset):
-        if isinstance(dataset, hf_datasets.Dataset):
-            dataset.set_format("torch")
-        else:
-            logger.critical("Unsupported dataset type")
-            raise TypeError("Unsupported dataset type")
-        
-        return dataset
-        
-    def __preprocess__(self, process_func):
-        '''
-        Call this func to process the data. Mainly preprocessing so we can split the medical notes of the two different datasets separately into its respective note types
-        Should instiantiate the function witht he model outside of the class.
-        '''
-        
-        pass
-    
-    def shuffle_split(self, split=None):
+    def joint_shuffle_split(self, split=None, seed=1):
         if not split:
             split = self.split_ratio
+        logger.info(f"Using train-val split: {split}")
         
-        # TODO: Shuffle and split into the different trainin datas
-        pass
+        split_dataset = dict()
+        for key, dataset in self.original_datasets.items():
+            logger.info(f"Splitting {key} dataset.")
+            
+            train_split, val_split = train_test_split(dataset, test_size=split[1], random_state=seed, shuffle=True)
+            # X_train_tensor = self.tokenizer(train_split['X'].tolist(), padding=True, truncation=True, return_tensors='pt')
+            # Y_train_tensor = self.tokenizer(train_split['Y'].tolist(), padding=True, truncation=True, return_tensors='pt')
+            # X_val_tensor = self.tokenizer(val_split['X'].tolist(), padding=True, truncation=True, return_tensors='pt')
+            # Y_val_tensor = self.tokenizer(val_split['Y'].tolist(), padding=True, truncation=True, return_tensors='pt')
+            
+            # split_dataset[key] = {'train': [X_train_tensor, Y_train_tensor], 'val': [X_val_tensor, Y_val_tensor]}
+            split_dataset[key] = {'train': [train_split['X'], train_split['Y']], 'val': [val_split['X'], val_split['Y']]}
+        
+        logger.info(f"Creating a single joint dataset of {self.original_datasets.keys()} dataset splits")
+        joint_split = {'train': [[], []], 'val': [[], []]}
+        for dataset in split_dataset.values():
+            X_train, Y_train = dataset['train']
+            X_val, Y_val = dataset['val']
+            
+            joint_split['train'][0].append(X_train)
+            joint_split['train'][1].append(Y_train)
+            joint_split['val'][0].append(X_val)
+            joint_split['val'][1].append(Y_val)
+            
+        # return joint_split
+
+        # Concatenate into final joint tensors
+        joint_split['train'][0] = pd.concat(joint_split['train'][0], ignore_index=True)
+        joint_split['train'][1] = pd.concat(joint_split['train'][1], ignore_index=True)
+        joint_split['val'][0] = pd.concat(joint_split['val'][0], ignore_index=True)
+        joint_split['val'][1] = pd.concat(joint_split['val'][1], ignore_index=True)
+        # joint_split = {split: ConcatDataset([dataset[split] for dataset in split_dataset.values()]) for split in ['train', 'val']}
+        
+        logger.info(f"Returning shuffled train-val splits")
+        return joint_split
+        
     
 def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> dict:
     '''
@@ -103,11 +119,6 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
                             # Save hf dataset as arrow(s)
                             ds.save_to_disk(ds_path)
                             logger.info(f"Done downloading %s and saved to {ds_path}.", dataset['src'])
-
-                # ds_processed_path = os.path.join(ds_all_path, "processed")
-                # ds_processed_ckpt = os.path.join(ds_all_path, "checkpoint.json")
-                # if os.path.exists(ds_processed_path):
-                #     if os.path.exists(ds_processed_dkpt):
                         
                 loaded_datasets[key] = ds
             else:
