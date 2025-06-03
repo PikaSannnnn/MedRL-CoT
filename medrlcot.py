@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # Combine cases into one for cases as example for SFT
     cases_datasets = dict()
     for key, dataset in preprocessed_datasets.items():
-        cases_datasets[key] = dataset.groupby('case_id').apply(mp.xy_split_processing).reset_index().sort_values('case_id')
+        cases_datasets[key] = dataset.groupby('case_id').apply(mp.xy_split_processing_sft).reset_index().sort_values('case_id')
     
     import os
     from medrlcot import data_manager

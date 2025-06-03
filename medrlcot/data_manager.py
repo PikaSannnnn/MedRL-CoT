@@ -5,7 +5,7 @@ import os
 import json
 
 import torch
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader, ConcatDataset, TensorDataset, Dataset
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split    # for "even" splitting
@@ -17,27 +17,51 @@ logger = logging.getLogger("DataManager")
 
 default_tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
-class Dataset:
+class MRCDataset(Dataset):
+    def __init__(self, dataframe, tokenizer, max_in=512, max_out=256):
+        self.df = dataframe.reset_index(drop=True)
+        self.tokenizer = tokenizer
+        self.max_in = max_in
+        self.max_out = max_out
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        in_txt = self.df.loc[idx, 'X']
+        out_txt = self.df.loc[idx, 'Y']
+
+        input_enc = self.tokenizer(in_txt, max_length=self.max_in, truncation=True, padding="max_length", return_tensors="pt")
+        output_enc = self.tokenizer(out_txt, max_length=self.max_out, truncation=True, padding="max_length", return_tensors="pt")
+
+        return {
+            'input_ids': input_enc['input_ids'].squeeze(0),
+            'attention_mask': input_enc['attention_mask'].squeeze(0),
+            'labels': output_enc['input_ids'].squeeze(0)
+        }
+
+class MedRL_CoT_Dataset:
     '''
     Custom dataset class meant to store the two datasets and to preprocess them before passing them into dataloaders. 
     
     The dataset is shuffled and split into train, validation, and testing on instantiation. 
     Although if it's not great or want to try with different sets, can call shuffle_split() to do this
     '''
-    def __init__(self, datasets, jss=None, tokenizer=None, split=[.75, .25], seed=None):
+    def __init__(self, datasets, jss=None, split=[.75, .25], seed=None, batch_size=32, tokenizer=None):
         # Meta Init
         self.num_entries = 0
         self.split_ratio = split
         self.seed = seed
+        self.batch_size = batch_size
         
         # Dataset Init
         self.original_datasets = datasets
         # self.datasets = self.__tokenize__()
-        self.tokenizer = tokenizer if tokenizer else default_tokenizer
+        self.tokenizer = tokenizer if tokenizer else default_tokenizer        
         self.data = jss(self.original_datasets) if jss else self.joint_shuffle_split(seed=seed)
         
     def __getitem__(self, key):
-        return self.data[key]
+        return pd.DataFrame(self.data[key]).transpose()
     
     def __len__(self):
         return len(self.data['train'][0])
@@ -85,6 +109,12 @@ class Dataset:
 
         logger.info(f"Returning shuffled train-val splits")
         return joint_split
+    
+    def get_dataloader(self, key):
+        assert key in ['train', 'val']
+        
+        key_ds = MRCDataset(self.__getitem__(key), self.tokenizer)
+        return DataLoader(key_ds, batch_size=self.batch_size, shuffle=True)
         
     
 def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> dict:
