@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader, ConcatDataset
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split    # for "even" splitting
+from sklearn.utils import shuffle
 from transformers import AutoTokenizer
 
 logger = logging.getLogger("DataManager")
@@ -33,6 +34,12 @@ class Dataset:
         self.tokenizer = tokenizer if tokenizer else default_tokenizer
         self.data = jss(self.original_datasets) if jss else self.joint_shuffle_split()
         
+    def __getitem__(self, key):
+        return self.data[key]
+    
+    def __len__(self):
+        return len(self.data['train'][0])
+        
     def joint_shuffle_split(self, split=None, seed=1):
         if not split:
             split = self.split_ratio
@@ -50,27 +57,22 @@ class Dataset:
             
             # split_dataset[key] = {'train': [X_train_tensor, Y_train_tensor], 'val': [X_val_tensor, Y_val_tensor]}
             split_dataset[key] = {'train': [train_split['X'], train_split['Y']], 'val': [val_split['X'], val_split['Y']]}
+            logger.info(f"Split into {train_split['X'].shape[0]} train rows and {val_split['X'].shape[0]} val rows")
         
         logger.info(f"Creating a single joint dataset of {self.original_datasets.keys()} dataset splits")
         joint_split = {'train': [[], []], 'val': [[], []]}
         for dataset in split_dataset.values():
-            X_train, Y_train = dataset['train']
-            X_val, Y_val = dataset['val']
-            
-            joint_split['train'][0].append(X_train)
-            joint_split['train'][1].append(Y_train)
-            joint_split['val'][0].append(X_val)
-            joint_split['val'][1].append(Y_val)
-            
-        # return joint_split
+            for key in ['train', 'val']:
+                X_split, Y_split = dataset[key]
+                joint_split[key][0].append(X_split)
+                joint_split[key][1].append(Y_split)
 
-        # Concatenate into final joint tensors
-        joint_split['train'][0] = pd.concat(joint_split['train'][0], ignore_index=True)
-        joint_split['train'][1] = pd.concat(joint_split['train'][1], ignore_index=True)
-        joint_split['val'][0] = pd.concat(joint_split['val'][0], ignore_index=True)
-        joint_split['val'][1] = pd.concat(joint_split['val'][1], ignore_index=True)
-        # joint_split = {split: ConcatDataset([dataset[split] for dataset in split_dataset.values()]) for split in ['train', 'val']}
-        
+        # Concatenate into final joint_spit
+        for key in ['train', 'val']:
+            joint_split[key][0], joint_split[key][1] = shuffle(pd.concat(joint_split[key][0], ignore_index=True), pd.concat(joint_split[key][1], ignore_index=True), random_state=seed+100)
+            logger.info(f"Joined {len(joint_split[key][0])} {key} rows")
+            logger.info(f"Shuffling {key}'s rows")
+
         logger.info(f"Returning shuffled train-val splits")
         return joint_split
         
