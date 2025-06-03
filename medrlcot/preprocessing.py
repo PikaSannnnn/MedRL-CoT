@@ -53,7 +53,8 @@ def mimic_preprocess(dataset, logger=None):
     cleaned_ds.loc[swapped_indices, ['sentence', 'class']] = cleaned_ds.loc[swapped_indices, ['class', 'sentence']].values # swap the values in indices where it's swapped
     # cleaned_ds.loc[other_class_indices, 'class'] = 'other'
     # cleaned_ds['class'] = cleaned_ds['class'].apply(lambda x: 'other' if x in other_classes else x)  # relabel non-standards to 'other'
-    drop_indices = cleaned_ds[~cleaned_ds['class'].isin(np.append(classes, 'other'))].index
+    invalid_sentences = cleaned_ds[cleaned_ds['sentence'].str.lower().isin(['', '__', 'None', '[]', 'False', '()'])]    # Redundant invalid_sentence search in entire cleaned_dataset in case some were uncaught
+    drop_indices = cleaned_ds[~cleaned_ds['class'].isin(np.append(classes, 'other'))].index.union(invalid_sentences.index)
     cleaned_ds = cleaned_ds.drop(index=drop_indices) # drop all others that aren't in our list of classes + 'other'  (basically all invalids)
 
     # Summary
@@ -94,11 +95,13 @@ def aug_preprocess(dataset, logger=None):
     other_classes = value_cnts[value_cnts >= 5].index.tolist()
     other_class_indices = nonstd_classes[nonstd_classes['class'].isin(other_classes)].index
 
+    # Clean the dataset
     swapped_indices = swapped_values.index
     cleaned_ds.loc[swapped_indices, ['sentence', 'class']] = cleaned_ds.loc[swapped_indices, ['class', 'sentence']].values # swap the values in indices where it's swapped
     cleaned_ds.loc[other_class_indices, 'class'] = 'other'
     # cleaned_ds['class'] = cleaned_ds['class'].apply(lambda x: 'other' if x in other_classes else x)  # relabel non-standards to 'other'
-    drop_indices = cleaned_ds[~cleaned_ds['class'].isin(np.append(classes, 'other'))].index
+    invalid_sentences = cleaned_ds[cleaned_ds['sentence'].str.lower().isin(['', '__', 'None', '[]', 'False', '()'])]    # Redundant invalid_sentence search in entire cleaned_dataset in case some were uncaught
+    drop_indices = cleaned_ds[~cleaned_ds['class'].isin(np.append(classes, 'other'))].index.union(invalid_sentences.index)
     cleaned_ds = cleaned_ds.drop(index=drop_indices) # drop all others that aren't in our list of classes + 'other' (basically all invalids)
 
     # Summary
@@ -130,9 +133,10 @@ def preprocess_datasets(logger=None):
         preprocessed_datasets[key] = proc_funcs[key](processed_datasets[key])
         logger.info("=" * 50)
         
-    return preprocessed_datasets
+    return preprocessed_datasets 
 
-def xy_split_processing(group):
+
+def xy_split_processing_sft(group, x_func=None, y_func=None):
     X = []
     Y = []
     for _, row in group.iterrows():
@@ -141,7 +145,7 @@ def xy_split_processing(group):
         else:
             Y.append(row)
 
-    X_case = ' '.join([str(row['sentence']) for row in X])
-    Y_case = ' '.join([f"{row['sentence']} <{row['class']}> " for row in Y])
+    X_case = ' '.join(f"{row['sentence']} <{row['class']}>" for _, row in group.iterrows()) # Input with all
+    Y_case = ' '.join([f"{row['sentence']} <{row['class']}> " for row in Y])    # Output with only thought_process and diagnosis
     
     return pd.Series({'X': X_case, 'Y': Y_case})

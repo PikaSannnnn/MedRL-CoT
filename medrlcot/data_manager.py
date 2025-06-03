@@ -11,6 +11,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split    # for "even" splitting
 from sklearn.utils import shuffle
 from transformers import AutoTokenizer
+from datetime import datetime
 
 logger = logging.getLogger("DataManager")
 
@@ -23,16 +24,17 @@ class Dataset:
     The dataset is shuffled and split into train, validation, and testing on instantiation. 
     Although if it's not great or want to try with different sets, can call shuffle_split() to do this
     '''
-    def __init__(self, datasets, jss=None, tokenizer=None, split=[.75, .25],):
+    def __init__(self, datasets, jss=None, tokenizer=None, split=[.75, .25], seed=None):
         # Meta Init
         self.num_entries = 0
         self.split_ratio = split
+        self.seed = seed
         
         # Dataset Init
         self.original_datasets = datasets
         # self.datasets = self.__tokenize__()
         self.tokenizer = tokenizer if tokenizer else default_tokenizer
-        self.data = jss(self.original_datasets) if jss else self.joint_shuffle_split()
+        self.data = jss(self.original_datasets) if jss else self.joint_shuffle_split(seed=seed)
         
     def __getitem__(self, key):
         return self.data[key]
@@ -40,10 +42,15 @@ class Dataset:
     def __len__(self):
         return len(self.data['train'][0])
         
-    def joint_shuffle_split(self, split=None, seed=1):
+    def joint_shuffle_split(self, split=None, seed=None):
         if not split:
             split = self.split_ratio
         logger.info(f"Using train-val split: {split}")
+
+        if seed is None:
+            seed = np.random.default_rng(int(datetime.now().timestamp())).integers(low=0, high=4294967295)
+            
+        logger.info(f"Split-Shuffle with seed {seed}")
         
         split_dataset = dict()
         for key, dataset in self.original_datasets.items():
@@ -72,6 +79,9 @@ class Dataset:
             joint_split[key][0], joint_split[key][1] = shuffle(pd.concat(joint_split[key][0], ignore_index=True), pd.concat(joint_split[key][1], ignore_index=True), random_state=seed+100)
             logger.info(f"Joined {len(joint_split[key][0])} {key} rows")
             logger.info(f"Shuffling {key}'s rows")
+            
+            joint_split[key][0] = joint_split[key][0].reset_index(drop=True)
+            joint_split[key][1] = joint_split[key][1].reset_index(drop=True)
 
         logger.info(f"Returning shuffled train-val splits")
         return joint_split
@@ -100,8 +110,7 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
                             logger.info(f"Loading saved hugginface %s dataset.", dataset['src'])
                             try:
                                 # Need list of arrow files in case dataset is split into multiple arrows
-                                arrow_dir = os.path.join(ds_path, "train")
-                                arrows = [os.path.join(arrow_dir, f) for f in os.listdir(arrow_dir) if f.endswith(".arrow")]
+                                arrows = [os.path.join(ds_path, f) for f in os.listdir(ds_path) if f.endswith(".arrow")]
                                 ds = hf_datasets.concatenate_datasets([hf_datasets.Dataset.from_file(arrow) for arrow in arrows])
                             except:
                                 ds = None
@@ -114,9 +123,10 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
                         try:
                             # Download dataset from hf
                             ds = hf_datasets.load_dataset(dataset['src'])
-                        except:
+                        except Exception as e:
                             ds = None
                             logger.error(f"Error downloading %s dataset!", dataset['src'])
+                            logger.error(e)
                         else:
                             # Save hf dataset as arrow(s)
                             ds.save_to_disk(ds_path)
@@ -142,9 +152,10 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
                                 arrows = [os.path.join(arrow_dir, f) for f in os.listdir(arrow_dir) if f.endswith(".arrow")]
                                 ds = hf_datasets.concatenate_datasets([hf_datasets.Dataset.from_file(arrow) for arrow in arrows])
                                 # ds = hf_datasets.Dataset.from_file(os.path.join(ds_path, "train", "data-00000-of-00001.arrow"))
-                            except:
+                            except Exception as e:
                                 ds = None
                                 logger.error(f"Error loading %s hugging_face dataset from local!", dataset['src'])
+                                logger.error(e)
                             else:
                                 logger.info(f"Successfully loaded hugging_face of %s as key {key}", dataset['src'])
                     else:
@@ -154,9 +165,10 @@ def load_datasets(datasets: dict, data_dir: str = 'data', load: bool = True) -> 
                                 "csv",
                                 data_files=f"{data_path}",
                             )
-                        except:
+                        except Exception as e:
                             ds = None
                             logger.error(f"Error loading original %s dataset from local!", dataset['src'])
+                            logger.error(e)
                         else:
                             # Save to the hugginface location
                             ds.save_to_disk(ds_path)
