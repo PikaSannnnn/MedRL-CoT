@@ -34,10 +34,14 @@ class MRCDataset(Dataset):
         input_enc = self.tokenizer(in_txt, max_length=self.max_in, truncation=True, padding="max_length", return_tensors="pt")
         output_enc = self.tokenizer(out_txt, max_length=self.max_out, truncation=True, padding="max_length", return_tensors="pt")
 
+        labels = output_enc['input_ids'].squeeze(0)
+        labels[labels == self.tokenizer.pad_token_id] = -100 
+
         return {
             'input_ids': input_enc['input_ids'].squeeze(0),
             'attention_mask': input_enc['attention_mask'].squeeze(0),
-            'labels': output_enc['input_ids'].squeeze(0)
+            'labels': labels
+            # 'labels': output_enc['input_ids'].squeeze(0)
         }
 
 class MedRL_CoT_Dataset:
