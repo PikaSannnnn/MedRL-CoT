@@ -29,7 +29,7 @@ from medrlcot.medrlcot_logger import setup_logger
 # -------------------------------------------------------
 # Globals / hyper-params
 # -------------------------------------------------------
-MODEL_NAME         = "google/flan-t5-base"
+MODEL_NAME         = "google/flan-t5-small"
 MAX_SOURCE_LENGTH  = 1_000      # tokens in the clinical note
 MAX_TARGET_LENGTH  = 1_000      # tokens in the CoT + diagnosis
 BATCH_SIZE         = 1          # fits on 12 GB GPUs with gradient-ckpt
