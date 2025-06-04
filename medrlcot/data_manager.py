@@ -63,8 +63,21 @@ class MedRL_CoT_Dataset:
         # self.datasets = self.__tokenize__()
         self.tokenizer = tokenizer if tokenizer else default_tokenizer        
         self.data = jss(self.original_datasets) if jss else self.joint_shuffle_split(seed=seed)
+        self.__clean__()
+
+    def __clean__(self):
+        for key in self.data:
+            dataset = self.__getitem__(key)
+
+            # Delete empty rows
+            dataset = dataset[dataset['Y'].str.strip() != '']
+            dataset = dataset[dataset['X'].str.strip() != '']
+            print(dataset[dataset['Y'].str.strip() == ''].index)
+    
+            self.data[key] = dataset.transpose()
         
     def __getitem__(self, key):
+        # return pd.DataFrame(self.data[key])
         return pd.DataFrame(self.data[key]).transpose()
     
     def __len__(self):
