@@ -147,14 +147,16 @@ def xy_split_processing_sft(group, x_func=None, y_func=None):
 
     X_case = x_func(X) if x_func else ' '.join([str(row['sentence']) for row in X])
     # X_case = ' '.join(f"{row['sentence']} <{row['class']}>" for _, row in group.iterrows()) # Input with all
-    Y_case = ' '.join([f"{row['sentence']} [{row['class']}] " for row in Y])    # Output with only thought_process and diagnosis
-    X_prompt = f"""Provide a step-by-step clinical reasoning followed by the diagnosis:
-    {X_case}
-
-    Thought Process:
-
-    Diagnosis:
+    # Y_case = ' '.join([f"{row['sentence']} [{row['class']}] " for row in Y])    # Output with only thought_process and diagnosis
+    Y_thought = ' '.join([f"{row['sentence']}" for row in Y if row['class'] == 'thought_process'])    # Output with only thought_process and diagnosis
+    Y_diag = ' '.join([f"{row['sentence']}" for row in Y if row['class'] == 'diagonsis'])    # Output with only thought_process and diagnosis
+    X_prompt = f"""Provide a step-by-step clinical reasoning followed by the diagnosis:\n{X_case}\n
+    Thought Process: \n Diagnosis:
     """
     
-    return pd.Series({'X': X_prompt, 'Y': Y_case})
+    Y_prompt = f"""Thought Process: {Y_thought}\n
+    Diagnosis: {Y_diag}
+    """
+    
+    return pd.Series({'X': X_prompt, 'Y': Y_prompt})
     # return pd.Series({'X': X_case, 'Y': Y_case})

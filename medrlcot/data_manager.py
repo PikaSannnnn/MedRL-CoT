@@ -18,7 +18,7 @@ logger = logging.getLogger("DataManager")
 default_tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
 class MRCDataset(Dataset):
-    def __init__(self, dataframe, tokenizer, max_in=1024, max_out=512):
+    def __init__(self, dataframe, tokenizer, max_in=512, max_out=256):
         self.df = dataframe.reset_index(drop=True)
         self.tokenizer = tokenizer
         self.max_in = max_in
@@ -31,11 +31,18 @@ class MRCDataset(Dataset):
         in_txt = self.df.loc[idx, 'X']
         out_txt = self.df.loc[idx, 'Y']
 
-        input_enc = self.tokenizer(in_txt, max_length=self.max_in, truncation=True, padding="max_length", return_tensors="pt")
-        output_enc = self.tokenizer(out_txt, max_length=self.max_out, truncation=True, padding="max_length", return_tensors="pt")
+        input_enc = self.tokenizer(in_txt, max_length=self.max_in, truncation=True, padding="longest", return_tensors="pt")
+        output_enc = self.tokenizer(out_txt, max_length=self.max_out, truncation=True, padding="longest", return_tensors="pt")
 
         labels = output_enc['input_ids'].squeeze(0)
         labels[labels == self.tokenizer.pad_token_id] = -100 
+
+        if idx == 0:
+            print("== Input Text ==")
+            print(self.tokenizer.decode(input_enc['input_ids'].squeeze(0), skip_special_tokens=True))
+            print("\n== Label Text ==")
+            print(self.tokenizer.decode([x for x in labels.tolist() if x != self.tokenizer.pad_token_id], skip_special_tokens=True))
+
 
         return {
             'input_ids': input_enc['input_ids'].squeeze(0),
