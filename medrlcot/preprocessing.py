@@ -130,7 +130,7 @@ def preprocess_datasets(logger=None):
     for key, item in processed_datasets.items():
         logger.info("=" * 50)
         logger.info(f"Cleaning up {key} dataset")
-        preprocessed_datasets[key] = proc_funcs[key](processed_datasets[key])
+        preprocessed_datasets[key] = proc_funcs[key](item)
         logger.info("=" * 50)
         
     return preprocessed_datasets 

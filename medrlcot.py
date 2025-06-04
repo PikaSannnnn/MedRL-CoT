@@ -33,7 +33,12 @@ if __name__ == "__main__":
     import medrlcot.config.env as mce
     model_cfg_path = os.path.join(os.getcwd(), "medrlcot/config/.env")
     medrlcot_config = mce.MedRL_CoT(model_cfg_path)
-    raw_datasets = data_manager.load_datasets(medrlcot_config.datasets, data_dir=medrlcot_config.data_dir)  # Load raw dataset (original cases) for RM
+    # raw_datasets = data_manager.load_datasets(medrlcot_config.datasets, data_dir=medrlcot_config.data_dir)  # Load raw dataset (original cases) for RM
     
     # Create customd dataset obj
-    cases_data = data_manager.Dataset(cases_datasets)
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-base")
+    cases_data = data_manager.MedRL_CoT_Dataset(cases_datasets, tokenizer=tokenizer)
+    
+    train_dataloader = cases_data.get_dataloader('train')
+    val_dataloader = cases_data.get_dataloader('val')

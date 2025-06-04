@@ -18,7 +18,7 @@ logger = logging.getLogger("DataManager")
 default_tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
 class MRCDataset(Dataset):
-    def __init__(self, dataframe, tokenizer, max_in=512, max_out=256):
+    def __init__(self, dataframe, tokenizer, max_in=1024, max_out=512):
         self.df = dataframe.reset_index(drop=True)
         self.tokenizer = tokenizer
         self.max_in = max_in
@@ -47,7 +47,7 @@ class MedRL_CoT_Dataset:
     The dataset is shuffled and split into train, validation, and testing on instantiation. 
     Although if it's not great or want to try with different sets, can call shuffle_split() to do this
     '''
-    def __init__(self, datasets, jss=None, split=[.75, .25], seed=None, batch_size=32, tokenizer=None):
+    def __init__(self, datasets, jss=None, split=[.75, .25], seed=None, batch_size=8, tokenizer=None):
         # Meta Init
         self.num_entries = 0
         self.split_ratio = split
@@ -110,10 +110,14 @@ class MedRL_CoT_Dataset:
         logger.info(f"Returning shuffled train-val splits")
         return joint_split
     
+    def get_torch_dataset(self, key):
+        assert key in ['train', 'val']
+        return MRCDataset(self.__getitem__(key), self.tokenizer)
+        
+    
     def get_dataloader(self, key):
         assert key in ['train', 'val']
-        
-        key_ds = MRCDataset(self.__getitem__(key), self.tokenizer)
+        key_ds = self.get_torch_dataset(key)
         return DataLoader(key_ds, batch_size=self.batch_size, shuffle=True)
         
     
